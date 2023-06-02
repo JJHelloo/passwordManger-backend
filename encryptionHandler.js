@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+// will be changed to master password future devlopment
 const secret = "pppppppppppppppppppppppppppppppp";
 
 const encrypt = (password) => {
