@@ -17,7 +17,7 @@ app.get('/', (req,res) =>{
 
 app.post("/addPassword", async (req, res) => {
   const {password, title} = req.body;
-  // says hashed but it is encrypted
+  // says hashed but it is encrypted will be changed
   const hashedPassword = encrypt(password);
 
   let sql = "INSERT INTO passwords (password, title, iv) VALUES (?,?,?)";
