@@ -4,7 +4,7 @@ const encrypt = (data, masterPassword) => {
   const salt = crypto.randomBytes(16).toString('hex');
 
   return new Promise((resolve, reject) => {
-    crypto.pbkdf2(masterPassword, salt, 100000, 32, 'sha512', (err, derivedKey) => {
+    crypto.pbkdf2(masterPassword, salt, 600000, 32, 'sha512', (err, derivedKey) => {
       if (err) {
         reject(err);
       } else {
@@ -19,7 +19,6 @@ const encrypt = (data, masterPassword) => {
           iv: iv.toString('hex'),
           data: encryptedData
         };
-
         resolve(encryptedObject);
       }
     });
@@ -28,7 +27,7 @@ const encrypt = (data, masterPassword) => {
 
 const decrypt = (encryption, masterPassword) => {
   return new Promise((resolve, reject) => {
-    crypto.pbkdf2(masterPassword, encryption.salt, 100000, 32, 'sha512', (err, derivedKey) => {
+    crypto.pbkdf2(masterPassword, encryption.salt, 600000, 32, 'sha512', (err, derivedKey) => {
       if (err) {
         reject(err);
       } else {

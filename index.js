@@ -2,12 +2,14 @@ const express = require("express");
 const bcrypt = require('bcrypt');
 const app = express()
 const mysql = require("mysql");
-const PORT = 3001;
+const dotenv = require('dotenv').config();
+const PORT = process.env.PORT || 3001;
 const pool = require("./dbPool.js");
 const cors = require("cors");
 const {encrypt, decrypt} = require("./encryptionHandler.js");
 const session = require('express-session');
 const saltRounds = 12;
+
 
 
 // Middleware to parse JSON bodies
@@ -19,10 +21,11 @@ app.use(cors({
 // app.use(cors());
 app.use(express.urlencoded({ extend: true }));
 
+
 // Session configuration
 app.set('trust proxy', 1) // trust first proxy 
 app.use(session({
-  secret: 'secret-key',
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
 }));
@@ -30,6 +33,7 @@ app.use(session({
 app.get('/', (req,res) =>{
   res.send("hello world");
 });
+
 //handle the login for users
 app.post("/login", async (req, res) => {
   const { email, masterPassword } = req.body;
@@ -46,7 +50,7 @@ const user_id = data[0].id; // Make sure this is the correct column name in your
 const match = await bcrypt.compare(masterPassword, passwordHash);
 
 if (match) {
-// req.session.authenticated = true;
+req.session.authenticated = true;
 req.session.user_id = user_id;
 req.session.email = email;
 req.session.masterPassword = passwordHash; // store masterPassword in the session
@@ -68,7 +72,7 @@ app.post("/signup", async (req, res) => {
   // Check if the email is already being used
   const emailExists = await checkEmailExists(email);
   if (emailExists) {
-    return res.status(400).json({ error: "Invalid registration data" });
+    return res.status(400).json({ error: "Email already exit" });
   }
 
   // Hash the password
@@ -234,7 +238,23 @@ async function executeSQL(sql, params) {
     });
   });
 }
-
+app.get("/checkAuthentication", (req, res) => {
+  if (req.session.authenticated === true) {
+    // User is authenticated
+    res.json({ authenticated: true });
+  } else {
+    // User is not authenticated
+    res.json({ authenticated: false });
+  }
+});
+// check if logged in middleware
+function isLoggedIn(req, res, next) {
+  if (req.session.authenticated) {
+    next();
+  } else {
+    // res.redirect("");
+  }
+}
 // listen to the port
 app.listen(PORT, ()=>{
     console.log("Server Started");
