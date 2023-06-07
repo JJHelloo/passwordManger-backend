@@ -6,10 +6,8 @@ const dotenv = require('dotenv').config();
 const PORT = process.env.PORT || 3001;
 const pool = require("./dbPool.js");
 const cors = require("cors");
-const {encrypt, decrypt} = require("./encryptionHandler.js");
+const rateLimit = require("express-rate-limit");
 const session = require('express-session');
-const saltRounds = 12;
-
 
 
 // Middleware to parse JSON bodies
@@ -20,6 +18,7 @@ app.use(cors({
 }));
 // app.use(cors());
 app.use(express.urlencoded({ extend: true }));
+// Apply the rate limiter to all requests
 
 
 // Session configuration
@@ -30,12 +29,20 @@ app.use(session({
   saveUninitialized: false,
 }));
 
+// Enable rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 5 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: "Too many requests from this IP, please try again after 15 minutes"
+});
+app.use(limiter);
+
 app.get('/', (req,res) =>{
   res.send("hello world");
 });
 
 //handle the login for users
-app.post("/login", async (req, res) => {
+app.post("/login", limiter, async (req, res) => {
   const { email, masterPassword } = req.body;
 
   const sql = `SELECT *
@@ -58,7 +65,7 @@ req.session.masterPassword = passwordHash; // store masterPassword in the sessio
 res.send({ authenticated: true, email: req.session.email, user_id: req.session.user_id});
 } else {
 console.log("not logged In :/");
-res.send({ error: "not logged In :/" });
+res.send({ error: "Invalid email or password" });
 }
 } else {
 res.send({ error: "Invalid email or password" });
@@ -75,12 +82,9 @@ app.post("/signup", async (req, res) => {
     return res.status(400).json({ error: "Email already exit" });
   }
 
-  // Hash the password
-  const hashedPassword = await bcrypt.hash(masterPassword, saltRounds);
-
-  // Insert the user data into the database
+  // Insert the user data into the database master password is already hased from the client end
   const insertQuery = "INSERT INTO users (email, password) VALUES (?, ?)";
-  const params = [email, hashedPassword];
+  const params = [email, masterPassword];
 
   try {
     await executeSQL(insertQuery, params);
@@ -91,34 +95,13 @@ app.post("/signup", async (req, res) => {
   }
 });
 
+// redone route to hopefully work with new client code..
 app.post("/addPassword", async (req, res) => {
-  const { password, title } = req.body;
-
-  // Retrieve the user's master password from the database
-  const getUserIdQuery = "SELECT password FROM users WHERE id = ?";
-  const user = await executeSQL(getUserIdQuery, [req.session.user_id]);
-
-  if (user.length === 0) {
-    return res.status(401).json({ error: "User not found" });
-  }
-  
-  // Set the value for the master password
-  const masterPassword = user[0].password;
-  // if (masterPassword) {
-  //   // If the master password was successfully retrieved, set it in the user's session data
-  //   req.session.masterPassword = masterPassword;
-  //   res.status(200).send('Login successful.');
-  // } else {
-  //   res.status(401).send('Invalid credentials.');
-  // }
-
+  const { password, title, iv, salt } = req.body;
   try {
-    // Encrypt the password using the master password
-    const encryptedPassword = await encrypt(password, masterPassword);
-
-    // Insert the encrypted password and website title into the database
+    // Insert the password and website title into the database
     let sql = "INSERT INTO passwords (user_id, password, title, salt, iv) VALUES (?, ?, ?, ?, ?)";
-    let params = [req.session.user_id, encryptedPassword.data, title, encryptedPassword.salt, encryptedPassword.iv];
+    const params = [req.session.user_id, password, title, salt, iv];
 
     await executeSQL(sql, params);
     res.json({ message: "Password added successfully" });
@@ -127,40 +110,13 @@ app.post("/addPassword", async (req, res) => {
     res.status(500).json({ error: "An error occurred when inserting the password." });
   }
 });
-//decrytion for the passwords..
-app.post('/decryptPassword', async (req, res) => {
-  const { password, iv, id } = req.body;
-  const { user_id, masterPassword } = req.session;
-  
-  const getPasswordQuery = `
-    SELECT password, salt, iv
-    FROM passwords
-    WHERE id = ? AND user_id = ?
-  `;
-  const passwordData = await executeSQL(getPasswordQuery, [id, user_id]);
-  
-  if (passwordData.length === 0) {
-    return res.status(401).json({ error: "Password not found" });
-  }
-
-  const { salt, iv: passwordIv } = passwordData[0];
-  
-  try {
-    const decryptedData = await decrypt({ data: password, salt, iv }, masterPassword);
-    res.send(decryptedData);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'An error occurred during password decryption.' });
-  }
-});
-
-
 // show the title of the users website they have stored
 app.get("/showPasswords", async (req, res) => {
   try {
     const sql = `SELECT * FROM passwords WHERE user_id = ?`;
     const params = [req.session.user_id];
     const data = await executeSQL(sql, params);
+    // console.log(data);
     res.send(data);
   } catch (err) {
     console.error(err);
@@ -168,28 +124,9 @@ app.get("/showPasswords", async (req, res) => {
   }
 });
 
-
-// app.get("/getUserEmail", async (req, res) => {
-//   const sql = `SELECT email FROM users WHERE id = ?`;
-//   const [result] = await executeSQL(sql, [user_id]);
-
-//   if (result) {
-//     const email = result.email;
-//     res.send({ email: email });
-//   } else {
-//     res.status(404).send({ error: "User not found" });
-//   }
-// });
-// app.use((req, res, next) => {
-//   console.log(req.session);
-//   next();
-// });
-
-
 async function checkEmailExists(email) {
   const query = "SELECT COUNT(*) AS count FROM users WHERE email = ?";
   const params = [email];
-
   try {
     const result = await executeSQL(query, params);
     return result[0].count > 0;
