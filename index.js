@@ -6,20 +6,24 @@ const dotenv = require('dotenv').config();
 const PORT = process.env.PORT || 3001;
 const pool = require("./dbPool.js");
 const cors = require("cors");
+const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const session = require('express-session');
 
 
 // Middleware to parse JSON bodies
 app.use(express.json());
+// Configure specific security headers
+app.use(helmet.hsts()); // Strict-Transport-Security (HSTS)
+app.use(helmet.noSniff()); // X-Content-Type-Options
+app.use(helmet.xssFilter()); // X-XSS-Protection
+app.use(helmet.frameguard({ action: 'sameorigin' })); // X-Frame-Options
 app.use(cors({
   origin: 'http://localhost:3000', // replace with your actual client URL
   credentials: true,
 }));
 // app.use(cors());
 app.use(express.urlencoded({ extend: true }));
-// Apply the rate limiter to all requests
-
 
 // Session configuration
 app.set('trust proxy', 1) // trust first proxy 
@@ -29,7 +33,7 @@ app.use(session({
   saveUninitialized: false,
 }));
 
-// Enable rate limiting
+//  rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 5 minutes
   max: 100, // limit each IP to 100 requests per windowMs
@@ -44,6 +48,13 @@ app.get('/', (req,res) =>{
 //handle the login for users
 app.post("/login", limiter, async (req, res) => {
   const { email, masterPassword } = req.body;
+  // Input validation
+  if (!email || typeof email !== "string" || !email.includes("@")) {
+    return res.status(400).json({ error: "Invalid email format" });
+  }
+  if (!masterPassword || typeof masterPassword !== "string" || masterPassword.length < 10) {
+    return res.status(400).json({ error: "Invalid master password" });
+  }
 
   const sql = `SELECT *
   FROM users
@@ -64,17 +75,23 @@ req.session.masterPassword = passwordHash; // store masterPassword in the sessio
 
 res.send({ authenticated: true, email: req.session.email, user_id: req.session.user_id});
 } else {
-console.log("not logged In :/");
 res.send({ error: "Invalid email or password" });
 }
 } else {
 res.send({ error: "Invalid email or password" });
-console.log("not logged In :/");
+
 }
 });
 // handle signup
 app.post("/signup", async (req, res) => {
   const {email, masterPassword } = req.body;
+  // input validation
+  if (!email || typeof email !== "string" || !email.includes("@")) {
+    return res.status(400).json({ error: "Invalid email format" });
+  }
+  if (!masterPassword || typeof masterPassword !== "string" || masterPassword.length < 10) {
+    return res.status(400).json({ error: "Invalid master password" });
+  }
 
   // Check if the email is already being used
   const emailExists = await checkEmailExists(email);
@@ -98,6 +115,9 @@ app.post("/signup", async (req, res) => {
 // redone route to hopefully work with new client code..
 app.post("/addPassword", async (req, res) => {
   const { password, title, iv, salt } = req.body;
+  if (!password || typeof password !== "string" || !title || typeof title !== "string") {
+    return res.status(400).json({ error: "Invalid password or title" });
+  }
   try {
     // Insert the password and website title into the database
     let sql = "INSERT INTO passwords (user_id, password, title, salt, iv) VALUES (?, ?, ?, ?, ?)";
@@ -116,7 +136,6 @@ app.get("/showPasswords", async (req, res) => {
     const sql = `SELECT * FROM passwords WHERE user_id = ?`;
     const params = [req.session.user_id];
     const data = await executeSQL(sql, params);
-    // console.log(data);
     res.send(data);
   } catch (err) {
     console.error(err);
