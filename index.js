@@ -1,8 +1,7 @@
 const express = require("express");
 const bcrypt = require('bcrypt');
-const app = express()
-const mysql = require("mysql");
-const dotenv = require('dotenv').config();
+const app = express();
+const crypto = require('crypto');
 const PORT = process.env.PORT || 3001;
 const pool = require("./dbPool.js");
 const cors = require("cors");
@@ -45,6 +44,11 @@ app.get('/', (req,res) =>{
   res.send("hello world");
 });
 
+// Generate a random encryption key
+const generateEncryptionKey = () => {
+  const key = crypto.randomBytes(32).toString('hex');
+  return key;
+};
 //handle the login for users
 app.post("/login", limiter, async (req, res) => {
   const { email, masterPassword } = req.body;
@@ -63,17 +67,21 @@ const data = await executeSQL(sql, [email]);
 
 if (data.length > 0) {
 const passwordHash = data[0].password;
+console.log("M ", masterPassword, " H", passwordHash);
 const email = data[0].email;
 const user_id = data[0].id; // Make sure this is the correct column name in your database
 const match = await bcrypt.compare(masterPassword, passwordHash);
 
 if (match) {
+// Generate and store the encryption key associated with the user's session
+const encryptionKey = generateEncryptionKey();
+req.session.encryptionKey = encryptionKey;  
 req.session.authenticated = true;
 req.session.user_id = user_id;
 req.session.email = email;
 req.session.masterPassword = passwordHash; // store masterPassword in the session
-
-res.send({ authenticated: true, email: req.session.email, user_id: req.session.user_id});
+res.send({ authenticated: true, email: req.session.email, user_id: req.session.user_id, 
+  encryptionKey: encryptionKey });
 } else {
 res.send({ error: "Invalid email or password" });
 }
