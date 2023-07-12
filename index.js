@@ -51,51 +51,49 @@ const generateEncryptionKey = () => {
 };
 //handle the login for users
 app.post("/login", limiter, async (req, res) => {
-  const { email, masterPassword } = req.body;
-  // Input validation
-  if (!email || typeof email !== "string" || !email.includes("@")) {
-    return res.status(400).json({ error: "Invalid email format" });
-  }
-  if (!masterPassword || typeof masterPassword !== "string" || masterPassword.length < 10) {
-    return res.status(400).json({ error: "Invalid master password" });
-  }
+  const { email } = req.body;
 
   const sql = `SELECT *
   FROM users
   WHERE email = ?`;
-const data = await executeSQL(sql, [email]);
+  const data = await executeSQL(sql, [email]);
 
-if (data.length > 0) {
-const passwordHash = data[0].password;
-console.log("M ", masterPassword, " H", passwordHash);
-const email = data[0].email;
-const user_id = data[0].id; // Make sure this is the correct column name in your database
-const match = await bcrypt.compare(masterPassword, passwordHash);
+  if (data.length > 0) {
+    const passwordHash = data[0].password;
+    const email = data[0].email;
+    const salt = data[0].salt;
+    const user_id = data[0].id; // Make sure this is the correct column name in your database
 
-if (match) {
-// Generate and store the encryption key associated with the user's session
-const encryptionKey = generateEncryptionKey();
-req.session.encryptionKey = encryptionKey;  
-req.session.authenticated = true;
-req.session.user_id = user_id;
-req.session.email = email;
-req.session.masterPassword = passwordHash; // store masterPassword in the session
-res.send({ authenticated: true, email: req.session.email, user_id: req.session.user_id, 
-  encryptionKey: encryptionKey });
-} else {
-res.send({ error: "Invalid email or password" });
-}
-} else {
-res.send({ error: "Invalid email or password" });
+    // Generate and store the encryption key associated with the user's session
+    const encryptionKey = generateEncryptionKey();
+    req.session.encryptionKey = encryptionKey;  
+    req.session.authenticated = true;
+    req.session.user_id = user_id;
+    req.session.email = email;
+    req.session.masterPassword = passwordHash; // store masterPassword in the session
 
-}
+    res.send({ 
+      authenticated: true, 
+      email: req.session.email, 
+      user_id: req.session.user_id, 
+      encryptionKey: encryptionKey, 
+      salt: salt, 
+      hashedPassword: passwordHash,
+      sessionId: req.session.id
+    });
+  } else {
+    res.send({ error: "Invalid email or password" });
+  }
 });
+
+
 // handle signup
 app.post("/signup", async (req, res) => {
-  const {email, masterPassword } = req.body;
+  const {email, masterPassword, salt } = req.body;
   // input validation
-  if (!email || typeof email !== "string" || !email.includes("@")) {
-    return res.status(400).json({ error: "Invalid email format" });
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  if (!email || typeof email !== "string" || !emailRegex.test(email)) {
+      return res.status(400).json({ error: "Invalid email format" });
   }
   if (!masterPassword || typeof masterPassword !== "string" || masterPassword.length < 10) {
     return res.status(400).json({ error: "Invalid master password" });
@@ -108,8 +106,8 @@ app.post("/signup", async (req, res) => {
   }
 
   // Insert the user data into the database master password is already hased from the client end
-  const insertQuery = "INSERT INTO users (email, password) VALUES (?, ?)";
-  const params = [email, masterPassword];
+  const insertQuery = "INSERT INTO users (email, password, salt) VALUES (?, ?, ?)";
+  const params = [email, masterPassword, salt];
 
   try {
     await executeSQL(insertQuery, params);
