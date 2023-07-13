@@ -119,6 +119,7 @@ app.post("/signup", async (req, res) => {
 });
 
 // redone route to hopefully work with new client code..
+// add users website passswords to database
 app.post("/addPassword", async (req, res) => {
   const { password, title, iv, salt } = req.body;
   if (!password || typeof password !== "string" || !title || typeof title !== "string") {
@@ -131,6 +132,24 @@ app.post("/addPassword", async (req, res) => {
 
     await executeSQL(sql, params);
     res.json({ message: "Password added successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "An error occurred when inserting the password." });
+  }
+});
+// update users website passwords.. 
+app.post("/updatePassword", async (req, res) => {
+  const {id, password, title, iv, salt } = req.body;
+  if (!password || typeof password !== "string" || !title || typeof title !== "string") {
+    return res.status(400).json({ error: "Invalid password or title" });
+  }
+  try {
+    // Insert the password and website title into the database
+    let sql = "UPDATE passwords SET password = ?, title = ?, salt = ?, iv = ? WHERE id = ? AND user_id = ?";
+    const params = [password, title, salt, iv, id, req.session.user_id];
+
+    await executeSQL(sql, params);
+    res.json({ message: "Password updates successfully" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "An error occurred when inserting the password." });
