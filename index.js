@@ -124,6 +124,7 @@ app.post("/signup", async (req, res) => {
 });
 
 // redone route to hopefully work with new client code..
+// add users website passswords to database
 app.post("/addPassword", async (req, res) => {
   const { password, title, iv, salt } = req.body;
   if (!password || typeof password !== "string" || !title || typeof title !== "string") {
