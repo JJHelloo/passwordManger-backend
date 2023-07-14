@@ -1,5 +1,5 @@
 const express = require("express");
-const bcrypt = require('bcrypt');
+// const bcrypt = require('bcrypt');
 const app = express();
 const crypto = require('crypto');
 const PORT = process.env.PORT || 3001;
@@ -30,7 +30,12 @@ app.use(session({
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
-}));
+  cookie: {
+    maxAge: 30 * 60 * 1000, // 30 minutes
+    secure: false, // if you're using HTTPS, set this to true
+    httpOnly: true
+  }
+}))
 
 //  rate limiting
 const limiter = rateLimit({
@@ -131,6 +136,24 @@ app.post("/addPassword", async (req, res) => {
 
     await executeSQL(sql, params);
     res.json({ message: "Password added successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "An error occurred when inserting the password." });
+  }
+});
+// update users website passwords.. 
+app.put("/updatePassword", async (req, res) => {
+  const {id, password, title, iv, salt } = req.body;
+  if (!password || typeof password !== "string" || !title || typeof title !== "string") {
+    return res.status(400).json({ error: "Invalid password or title" });
+  }
+  try {
+    // Insert the password and website title into the database
+    let sql = "UPDATE passwords SET password = ?, title = ?, salt = ?, iv = ? WHERE id = ? AND user_id = ?";
+    const params = [password, title, salt, iv, id, req.session.user_id];
+
+    await executeSQL(sql, params);
+    res.json({ message: "Password updates successfully" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "An error occurred when inserting the password." });
