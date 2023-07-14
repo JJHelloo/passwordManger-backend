@@ -1,5 +1,5 @@
 const express = require("express");
-const bcrypt = require('bcrypt');
+// const bcrypt = require('bcrypt');
 const app = express();
 const crypto = require('crypto');
 const PORT = process.env.PORT || 3001;
@@ -30,7 +30,12 @@ app.use(session({
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
-}));
+  cookie: {
+    maxAge: 30 * 60 * 1000, // 30 minutes
+    secure: false, // if you're using HTTPS, set this to true
+    httpOnly: true
+  }
+}))
 
 //  rate limiting
 const limiter = rateLimit({
@@ -138,7 +143,7 @@ app.post("/addPassword", async (req, res) => {
   }
 });
 // update users website passwords.. 
-app.post("/updatePassword", async (req, res) => {
+app.put("/updatePassword", async (req, res) => {
   const {id, password, title, iv, salt } = req.body;
   if (!password || typeof password !== "string" || !title || typeof title !== "string") {
     return res.status(400).json({ error: "Invalid password or title" });
