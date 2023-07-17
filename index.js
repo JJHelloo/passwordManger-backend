@@ -172,7 +172,7 @@ app.get("/showPasswords", async (req, res) => {
     res.status(500).json({ error: 'An error occurred when selecting the passwords.' });
   }
 });
-
+// check if an email exist before logins
 async function checkEmailExists(email) {
   const query = "SELECT COUNT(*) AS count FROM users WHERE email = ?";
   const params = [email];
